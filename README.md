@@ -15,6 +15,10 @@ If you are looking for a C++ library, you might try this wrapper: [https://githu
 * Provides very simple and intuitive interface.
 
 
+## Limitation
+
+The parser limits container nesting to 32 levels to bound stack use during parsing and cleanup.
+
 ## Usage
 
 Please see the `toml.h` file for details. The following is a simple example that
