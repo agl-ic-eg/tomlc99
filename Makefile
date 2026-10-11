@@ -13,7 +13,7 @@ LIB_SHARED = libtoml.so.$(LIB_VERSION)
 # to compile for debug: make DEBUG=1
 # to compile for no debug: make
 ifdef DEBUG
-    CFLAGS += -O0 -g
+    CFLAGS += -O0 -g -fsanitize=address,undefined
 else
     CFLAGS += -O2 -DNDEBUG
 endif
