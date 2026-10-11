@@ -1330,8 +1330,11 @@ static int walk_tabpath(context_t *ctx) {
       if (0 == (base[n] = (toml_table_t *)CALLOC(1, sizeof(*base[n]))))
         return e_outofmemory(ctx, FLINE);
 
-      if (0 == (base[n]->key = STRDUP(key)))
+      if (0 == (base[n]->key = STRDUP(key))) {
+        xfree(base[n]);
+        base[n] = (toml_table_t *)NULL;
         return e_outofmemory(ctx, FLINE);
+      }
 
       nexttab = curtab->tab[curtab->ntab++];
       nexttab->depth = curtab->depth + 1;
