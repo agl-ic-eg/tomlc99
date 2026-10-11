@@ -35,6 +35,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Maximum container depth; the root table is at depth zero. */
+#if !defined(TOML_MAX_DEPTH)
+#define TOML_MAX_DEPTH (32)
+#endif  // !defined(TOML_MAX_DEPTH)
+
 static void *(*ppmalloc)(size_t) = malloc;
 static void (*ppfree)(void *) = free;
 
@@ -294,6 +299,8 @@ struct toml_arritem_t {
   toml_table_t *tab;
 };
 
+
+
 struct toml_array_t {
   const char *key; /* key to this array */
   int kind;        /* element kind: 'v'alue, 'a'rray, or 't'able, 'm'ixed */
@@ -301,6 +308,7 @@ struct toml_array_t {
                       'D'ate, 'T'imestamp, 'm'ixed */
 
   int nitem; /* number of elements */
+  int depth; /* depth of this array in the tree */
   toml_arritem_t *item;
 };
 
@@ -308,6 +316,7 @@ struct toml_table_t {
   const char *key; /* key to this table */
   bool implicit;   /* table was created implicitly */
   bool readonly;   /* no more modification allowed */
+  int depth; /* depth of this table in the tree */
 
   /* key-values in the table */
   int nkval;
@@ -405,6 +414,15 @@ static int e_keyexists(context_t *ctx, int lineno) {
 static int e_forbid(context_t *ctx, int lineno, const char *msg) {
   snprintf(ctx->errbuf, ctx->errbufsz, "line %d: %s", lineno, msg);
   return -1;
+}
+
+/* Check nesting depth. */
+static int check_container_depth(context_t *ctx, int parent_depth, int lineno) {
+  if (parent_depth >= TOML_MAX_DEPTH)
+    return e_syntax(ctx, lineno,
+                    "maximum nesting depth exceeded (max "
+                    TOSTRING(TOML_MAX_DEPTH) ")");
+  return 0;
 }
 
 static void *expand(void *p, int sz, int newsz) {
@@ -798,6 +816,11 @@ static toml_table_t *create_keytable_in_table(context_t *ctx, toml_table_t *tab,
     return 0;
   }
 
+  if (check_container_depth(ctx, tab->depth, keytok.lineno)) {
+    xfree(newkey);
+    return 0;
+  }
+
   /* create a new table entry */
   int n = tab->ntab;
   toml_table_t **base;
@@ -814,6 +837,7 @@ static toml_table_t *create_keytable_in_table(context_t *ctx, toml_table_t *tab,
     return 0;
   }
   dest = tab->tab[tab->ntab++];
+  dest->depth = tab->depth + 1;
 
   /* save the key in the new table struct */
   dest->key = newkey;
@@ -838,6 +862,11 @@ static toml_array_t *create_keyarray_in_table(context_t *ctx, toml_table_t *tab,
     return 0;
   }
 
+  if (check_container_depth(ctx, tab->depth, keytok.lineno)) {
+    xfree(newkey);
+    return 0;
+  }
+
   /* make a new array entry */
   int n = tab->narr;
   toml_array_t **base;
@@ -854,6 +883,8 @@ static toml_array_t *create_keyarray_in_table(context_t *ctx, toml_table_t *tab,
     return 0;
   }
   toml_array_t *dest = tab->arr[tab->narr++];
+
+  dest->depth = tab->depth + 1;
 
   /* save the key in the new array struct */
   dest->key = newkey;
@@ -878,6 +909,9 @@ static toml_arritem_t *create_value_in_array(context_t *ctx,
  */
 static toml_array_t *create_array_in_array(context_t *ctx,
                                            toml_array_t *parent) {
+  if (check_container_depth(ctx, parent->depth, ctx->tok.lineno))
+    return 0;
+
   const int n = parent->nitem;
   toml_arritem_t *base = expand_arritem(parent->item, n);
   if (!base) {
@@ -889,6 +923,7 @@ static toml_array_t *create_array_in_array(context_t *ctx,
     e_outofmemory(ctx, FLINE);
     return 0;
   }
+  ret->depth = parent->depth + 1;
   base[n].arr = ret;
   parent->item = base;
   parent->nitem++;
@@ -899,6 +934,9 @@ static toml_array_t *create_array_in_array(context_t *ctx,
  */
 static toml_table_t *create_table_in_array(context_t *ctx,
                                            toml_array_t *parent) {
+  if (check_container_depth(ctx, parent->depth, ctx->tok.lineno))
+    return 0;
+
   int n = parent->nitem;
   toml_arritem_t *base = expand_arritem(parent->item, n);
   if (!base) {
@@ -910,6 +948,7 @@ static toml_table_t *create_table_in_array(context_t *ctx,
     e_outofmemory(ctx, FLINE);
     return 0;
   }
+  ret->depth = parent->depth + 1;
   base[n].tab = ret;
   parent->item = base;
   parent->nitem++;
@@ -1277,6 +1316,9 @@ static int walk_tabpath(context_t *ctx) {
       return e_keyexists(ctx, ctx->tpath.tok[i].lineno);
 
     default: { /* Not found. Let's create an implicit table. */
+      if (check_container_depth(ctx, curtab->depth, ctx->tpath.tok[i].lineno))
+        return -1;
+
       int n = curtab->ntab;
       toml_table_t **base =
           (toml_table_t **)expand_ptrarr((void **)curtab->tab, n);
@@ -1292,6 +1334,7 @@ static int walk_tabpath(context_t *ctx) {
         return e_outofmemory(ctx, FLINE);
 
       nexttab = curtab->tab[curtab->ntab++];
+      nexttab->depth = curtab->depth + 1;
 
       /* tabs created by walk_tabpath are considered implicit */
       nexttab->implicit = true;
@@ -1427,6 +1470,8 @@ toml_table_t *toml_parse(char *conf, char *errbuf, int errbufsz) {
     // Do not goto fail, root table not set up yet
     return 0;
   }
+
+  ctx.root->depth = 0;
 
   // set root as default table
   ctx.curtab = ctx.root;
