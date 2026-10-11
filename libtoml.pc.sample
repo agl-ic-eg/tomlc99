@@ -6,6 +6,6 @@ includedir=${prefix}/include
 Name: libtoml
 URL: https://github.com/cktan/tomlc99/
 Description: TOML C library in c99.
-Version: v1.0
+Version: v1.1
 Libs: -L${libdir} -ltoml
 Cflags: -I${includedir}

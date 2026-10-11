@@ -6,7 +6,7 @@ EXEC = toml_json toml_cat toml_sample
 PCFILE = libtoml.pc
 
 CFLAGS = -std=c99 -Wall -Wextra -fpic
-LIB_VERSION = 1.0
+LIB_VERSION = 1.1
 LIB = libtoml.a
 LIB_SHARED = libtoml.so.$(LIB_VERSION)
 
@@ -15,7 +15,7 @@ LIB_SHARED = libtoml.so.$(LIB_VERSION)
 ifdef DEBUG
     CFLAGS += -O0 -g -fsanitize=address,undefined
 else
-    CFLAGS += -O2 -DNDEBUG
+    CFLAGS += -DNDEBUG
 endif
 
 
