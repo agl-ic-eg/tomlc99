@@ -101,8 +101,13 @@ static char *STRNDUP(const char *s, size_t n) {
  */
 int toml_utf8_to_ucs(const char *orig, int len, int64_t *ret) {
   const unsigned char *buf = (const unsigned char *)orig;
-  unsigned i = *buf++;
+  unsigned i = 0;
   int64_t v;
+
+  if (buf == NULL || len < 1)
+    return -1;
+
+  i = *buf++;
 
   /* 0x00000000 - 0x0000007F:
      0xxxxxxx
@@ -918,6 +923,8 @@ static toml_array_t *create_array_in_array(context_t *ctx,
     e_outofmemory(ctx, FLINE);
     return 0;
   }
+  parent->item = base;
+
   toml_array_t *ret = (toml_array_t *)CALLOC(1, sizeof(toml_array_t));
   if (!ret) {
     e_outofmemory(ctx, FLINE);
@@ -925,7 +932,6 @@ static toml_array_t *create_array_in_array(context_t *ctx,
   }
   ret->depth = parent->depth + 1;
   base[n].arr = ret;
-  parent->item = base;
   parent->nitem++;
   return ret;
 }
@@ -943,6 +949,8 @@ static toml_table_t *create_table_in_array(context_t *ctx,
     e_outofmemory(ctx, FLINE);
     return 0;
   }
+  parent->item = base;
+
   toml_table_t *ret = (toml_table_t *)CALLOC(1, sizeof(toml_table_t));
   if (!ret) {
     e_outofmemory(ctx, FLINE);
@@ -950,7 +958,6 @@ static toml_table_t *create_table_in_array(context_t *ctx,
   }
   ret->depth = parent->depth + 1;
   base[n].tab = ret;
-  parent->item = base;
   parent->nitem++;
   return ret;
 }
@@ -1911,6 +1918,9 @@ static int next_token(context_t *ctx, int dotisspecial) {
 }
 
 const char *toml_key_in(const toml_table_t *tab, int keyidx) {
+  if (keyidx < 0)
+    return 0;
+
   if (keyidx < tab->nkval)
     return tab->kval[keyidx]->key;
 
@@ -2200,6 +2210,10 @@ int toml_rtod_ex(toml_raw_t src, double *ret_, char *buf, int buflen) {
   const char *s = src;
   double dummy;
   double *ret = ret_ ? ret_ : &dummy;
+
+  // Must have at least 2 bytes for a valid number (e.g., "0" and NUL)
+  if (buflen < 2)
+    return -1;
 
   /* allow +/- */
   if (s[0] == '+' || s[0] == '-')
