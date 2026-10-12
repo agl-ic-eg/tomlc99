@@ -28,6 +28,7 @@ jobs:
         with:
           languages: c-cpp
           build-mode: manual
+          queries: security-and-quality
 
       - name: Build C code
         run: make -B
